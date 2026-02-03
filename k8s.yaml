@@ -122,10 +122,14 @@ data:
       datasource:
         url: jdbc:postgresql://host.minikube.internal:5432/muffin_wallet
         username: muffin-wallet
+      zipkin:
+        base-url: "http://host.minikube.internal:9411"
     logging:
       pattern:
         level: "%5p [%X{traceId:-},%X{spanId:-}]"
       file.name: /logs/app.log
+      level:
+        zipkin: DEBUG
 
     currency:
       service:
@@ -135,11 +139,12 @@ data:
         sampling:
           probability: 1.0
       zipkin:
-        endpoint: "http://host.minikube.internal:9411/api/v2/spans"
+        tracing:
+          endpoint: "http://host.minikube.internal:9411/api/v2/spans"
       endpoints:
         web:
           exposure:
-            include: health, info, prometheus
+            '*'
       endpoint:
         health:
           probes:
@@ -155,7 +160,9 @@ data:
             http:
               server:
                 requests: true
-
+        export:
+          zipkin:
+            enabled: true
 ---
 apiVersion: apps/v1
 kind: Deployment

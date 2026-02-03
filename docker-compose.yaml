@@ -1,12 +1,12 @@
 services:
-#  postgres:
-#    image: postgres
-#    ports:
-#      - 5432:5432
-#    environment:
-#      - POSTGRES_USER=muffin-wallet
-#      - POSTGRES_PASSWORD=muffin-wallet
-#      - POSTGRES_DB=muffin_wallet
+  postgres:
+    image: postgres
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=muffin-wallet
+      - POSTGRES_PASSWORD=muffin-wallet
+      - POSTGRES_DB=muffin_wallet
 
   loki:
     image: grafana/loki:latest
@@ -27,6 +27,7 @@ services:
     restart: unless-stopped
     networks:
         - logging-network
+        - tracing-network
     volumes:
         - ./configs/grafana:/var/lib/grafana
     depends_on:
@@ -38,7 +39,11 @@ services:
     ports:
       - "9411:9411"
     restart: unless-stopped
+    networks:
+        - tracing-network
 
 networks:
   logging-network:
+    driver: bridge
+  tracing-network:
     driver: bridge
