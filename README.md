@@ -28,3 +28,11 @@ kubectl apply -f k8s.yaml
 ```
 Сервис muffin-wallet будет доступен по адресу: http://muffin-wallet.ru:8080/swagger-ui/index.html
 Grafana будет доступна по адресу: http://localhost:3000/ . Логин и пароль: admin
+
+#### Дашборд с логами
+<img width="1467" height="558" alt="image" src="https://github.com/user-attachments/assets/0f5d5546-d083-406f-b178-e2645be5ce52" />
+
+#### Трейсы в Zipkin:
+<img width="1709" height="945" alt="image" src="https://github.com/user-attachments/assets/e797fd34-f623-49f2-92f3-8c1912f3d984" />
+
+
