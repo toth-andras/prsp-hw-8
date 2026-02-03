@@ -35,4 +35,7 @@ Grafana будет доступна по адресу: http://localhost:3000/ . 
 #### Трейсы в Zipkin:
 <img width="1709" height="945" alt="image" src="https://github.com/user-attachments/assets/e797fd34-f623-49f2-92f3-8c1912f3d984" />
 
+Трейсы можно занести на дашборд:
+<img width="1465" height="367" alt="Pasted Graphic 1" src="https://github.com/user-attachments/assets/2e9aecac-c86d-4472-88a9-ac59fbf3dab1" />
+Но из-за ограничений grafana для поиска по traceId придется Visualization, поэтому я в итоге решил отказаться от трейсов на дашборде
 
