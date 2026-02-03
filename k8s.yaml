@@ -1,0 +1,239 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: muffin-wallet
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: muffin-wallet.ru
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: muffin-wallet
+                port:
+                  number: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: muffin-wallet
+spec:
+  type: ClusterIP
+  selector:
+    app: muffin-wallet
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8081
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muffin-wallet
+  labels:
+    app: muffin-wallet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: muffin-wallet
+  template:
+    metadata:
+      labels:
+        app: muffin-wallet
+    spec:
+      volumes:
+        - name: application-config-volume
+          configMap:
+            name: muffin-wallet
+        - name: promtail-config
+          configMap:
+            name: promtail-config
+        - name: log-volume
+          emptyDir: {}
+      containers:
+        - name: promtail
+          image: grafana/promtail:2.8.2
+          args:
+            - -config.file=/etc/promtail/config/promtail.yaml
+          volumeMounts:
+            - name: log-volume
+              mountPath: /logs
+            - name: promtail-config
+              mountPath: /etc/promtail/config
+        - name: muffin-wallet
+          image: andrastot/muffin-wallet:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+          volumeMounts:
+            - name: application-config-volume
+              mountPath: /muffin/config
+            - name: log-volume
+              mountPath: /logs
+          envFrom:
+            - secretRef:
+                name: muffin-wallet
+            - configMapRef:
+                name: muffin-wallet-env
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: muffin-wallet
+data:
+  SPRING_DATASOURCE_PASSWORD: bXVmZmluLXdhbGxldA==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: muffin-wallet-env
+data:
+  JDK_JAVA_OPTIONS: -Dspring.config.additional-location=/muffin/config/application.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: muffin-wallet
+data:
+  application.yaml: |
+    ---
+    server:
+      port: 8081
+
+    spring:
+      datasource:
+        url: jdbc:postgresql://host.minikube.internal:5432/muffin_wallet
+        username: muffin-wallet
+    logging:
+      pattern:
+        level: "%5p [%X{traceId:-},%X{spanId:-}]"
+      file.name: /logs/app.log
+
+    currency:
+      service:
+        url: http://muffin-currency:8083/rate
+    management:
+      tracing:
+        sampling:
+          probability: 1.0
+      zipkin:
+        endpoint: "http://host.minikube.internal:9411/api/v2/spans"
+      endpoints:
+        web:
+          exposure:
+            include: health, info, prometheus
+      endpoint:
+        health:
+          probes:
+            enabled: true
+          show-details: always
+      metrics:
+        enable:
+          http:
+            server:
+              requests: true
+        distribution:
+          percentiles-histogram:
+            http:
+              server:
+                requests: true
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muffin-currency
+  labels:
+    app: muffin-currency
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: muffin-currency
+  template:
+    metadata:
+      labels:
+        app: muffin-currency
+    spec:
+      containers:
+      - name: muffin-currency
+        image: andrastot/muffin-currency:latest
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /rate?from=PLAIN&to=CHOKOLATE
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /rate?from=PLAIN&to=CHOKOLATE
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: muffin-currency
+spec:
+  selector:
+    app: muffin-currency
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /tmp/positions.yaml
+
+    clients:
+      - url: http://host.minikube.internal:3100/loki/api/v1/push
+
+    scrape_configs:
+      - job_name: muffin-wallet-logs-scraper
+        pipeline_stages:
+          - regex:
+              expression: '(?P<level>TRACE|DEBUG|INFO|WARNING|WARN|ERROR|OFF) \[(?P<traceId>[a-f0-9]+),(?P<spanId>[a-f0-9]+)\]'
+          - labels:
+              traceId:
+              spanId:
+              level:
+        static_configs:
+          - targets:
+              - localhost
+            labels:
+              service: muffin-wallet
+              job: muffin-wallet-logs-scraper
+              __path__: /logs/*.log
